@@ -151,6 +151,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 // Query to fetch symptoms for display in form
 $gejala_result = mysqli_query($conn, "SELECT * FROM gejala");
+$gejala_array = mysqli_fetch_all($gejala_result, MYSQLI_ASSOC);
+$total_questions = count($gejala_array);
+$questions_per_page = 3;
+$total_pages = ceil($total_questions / $questions_per_page) + 1;
 ?>
 
 <!DOCTYPE html>
@@ -184,6 +188,10 @@ $gejala_result = mysqli_query($conn, "SELECT * FROM gejala");
    text-align: center;
 }
     </style>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+
 </head>
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-light bg-navbar">
@@ -216,6 +224,7 @@ $gejala_result = mysqli_query($conn, "SELECT * FROM gejala");
                     </div>
                     <div class="card-body">
                         <form action="konsultasi.php" method="POST">
+                        <div class="form-page" id="page-1">
                             <div class="mb-3">
                                 <label for="durasi_hubungan" class="form-label">Durasi Hubungan (dalam bulan)</label>
                                 <input type="number" class="form-control" id="durasi_hubungan" name="durasi_hubungan" required>
@@ -228,20 +237,34 @@ $gejala_result = mysqli_query($conn, "SELECT * FROM gejala");
                                 <label for="tanggal_putus" class="form-label">Tanggal Putus</label>
                                 <input type="date" class="form-control" id="tanggal_putus" name="tanggal_putus" required>
                             </div>
-                            <?php while ($row = mysqli_fetch_assoc($gejala_result)) : ?>
-                                <div class="mb-3">
-                                    <label class="form-label">Apakah anda <?php echo $row['nama']; ?> pasca putus cinta</label>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="gejala[<?php echo $row['id']; ?>]" id="gejala_<?php echo $row['id']; ?>_ya" value="1" required>
-                                        <label class="form-check-label checkbox-label" for="gejala_<?php echo $row['id']; ?>_ya">Ya</label>
+                        </div>
+                            <?php for ($page = 1; $page <= $total_pages; $page++) : ?>
+                                    <div class="question-page" id="page-<?php echo $page; ?>" style="display: <?php echo $page === 1 ? 'block' : 'none'; ?>;">
+                                        <?php
+                                        $start = ($page - 1) * $questions_per_page;
+                                        $end = min($start + $questions_per_page, $total_questions);
+                                        for ($i = $start; $i < $end; $i++) :
+                                            $row = $gejala_array[$i];
+                                        ?>
+                                            <div class="mb-3">
+                                                <label class="form-label">Apakah anda <?php echo $row['nama']; ?> pasca putus cinta</label>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="gejala[<?php echo $row['id']; ?>]" id="gejala_<?php echo $row['id']; ?>_ya" value="1" required>
+                                                    <label class="form-check-label checkbox-label" for="gejala_<?php echo $row['id']; ?>_ya">Ya</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="gejala[<?php echo $row['id']; ?>]" id="gejala_<?php echo $row['id']; ?>_tidak" value="0" required>
+                                                    <label class="form-check-label checkbox-label" for="gejala_<?php echo $row['id']; ?>_tidak">Tidak</label>
+                                                </div>
+                                            </div>
+                                        <?php endfor; ?>
                                     </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="gejala[<?php echo $row['id']; ?>]" id="gejala_<?php echo $row['id']; ?>_tidak" value="0" required>
-                                        <label class="form-check-label checkbox-label" for="gejala_<?php echo $row['id']; ?>_tidak">Tidak</label>
-                                    </div>
+                                <?php endfor; ?>
+                                <div class="mt-3">
+                                    <button type="button" id="prevBtn" class="btn btn-secondary" style="display: none;">Previous</button>
+                                    <button type="button" id="nextBtn" class="btn btn-primary">Next</button>
+                                    <button type="submit" id="diagnoseBtn" class="btn btn-success" style="display: none;">Diagnosa</button>
                                 </div>
-                            <?php endwhile; ?>
-                            <button type="submit" class="btn btn-primary">Submit</button>
                         </form>
                     </div>
                 </div>
@@ -285,5 +308,70 @@ $gejala_result = mysqli_query($conn, "SELECT * FROM gejala");
         <?php endif; ?>
     </div>
 </section>
+<script>
+        $(document).ready(function() {
+            let currentPage = 1;
+            const totalPages = <?php echo $total_pages; ?>;
+
+            function showPage(page) {
+                $('.question-page').hide();
+                $('.form-page').hide();
+                $(`#page-${page}`).show();
+                
+                if (page === 1) {
+                    $('#prevBtn').hide();
+                } else {
+                    $('#prevBtn').show();
+                }
+
+                if (page === totalPages) {
+                    $('#nextBtn').hide();
+                    $('#diagnoseBtn').hide();
+                    $('#prevBtn').show();
+                } else if (page === totalPages - 1) {
+                    $('#nextBtn').hide();
+                    $('#diagnoseBtn').show();
+                } else {
+                    $('#nextBtn').show();
+                    $('#diagnoseBtn').hide();
+                }
+            }
+
+            $('#nextBtn').click(function() {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    showPage(currentPage);
+                }
+            });
+
+            $('#prevBtn').click(function() {
+                if (currentPage > 1) {
+                    currentPage--;
+                    showPage(currentPage);
+                }
+            });
+
+            $('#diagnoseBtn').click(function(e) {
+                e.preventDefault();
+                // Perform AJAX submission
+                $.ajax({
+                    url: 'konsultasi.php',
+                    method: 'POST',
+                    data: $('#consultationForm').serialize(),
+                    success: function(response) {
+                        // Assuming the response contains the diagnosis result
+                        $('#diagnosisResult').html(response);
+                        currentPage++;
+                        showPage(currentPage);
+                    },
+                    error: function() {
+                        alert('An error occurred. Please try again.');
+                    }
+                });
+            });
+
+            showPage(currentPage);
+        });
+    </script>
 </body>
 </html>  form konsultasi buatlah pagination berupa next dan previous tapi diakhir pevoius berubah menjadi button diagnosa
